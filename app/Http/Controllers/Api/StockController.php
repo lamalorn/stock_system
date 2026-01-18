@@ -30,11 +30,7 @@ class StockController extends Controller
 
     public function decrease(StockChangeRequest $request)
     {
-        $data = $request->validated([
-            'product_id' => ['required', 'integer'],
-            'qty' => ['required', 'numeric', 'gt:0'],
-            'note' => ['nullable', 'string'],
-        ]);
+        $data = $request->validated();
 
         $this->stock->decrease(
             productId: (int)$data['product_id'],

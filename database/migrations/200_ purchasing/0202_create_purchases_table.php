@@ -13,8 +13,16 @@ return new class extends Migration
     {
         Schema::create('purchases', function (Blueprint $table) {
             $table->id();
+            $table->foreignId('supplier_id')->constrained();
+            $table->string('purchase_no', 50)->unique();
+            $table->string('status', 30);
+            $table->foreignId('currency_id')->constrained();
+            $table->decimal('total', 14, 2)->default(0);
+            $table->timestamp('received_at')->nullable();
+            $table->foreignId('created_by')->constrained('users');
             $table->timestamps();
         });
+
     }
 
     /**

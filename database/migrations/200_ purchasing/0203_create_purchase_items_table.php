@@ -13,6 +13,11 @@ return new class extends Migration
     {
         Schema::create('purchase_items', function (Blueprint $table) {
             $table->id();
+            $table->foreignId('purchase_id')->constrained()->cascadeOnDelete();
+            $table->foreignId('product_id')->constrained();
+            $table->integer('qty');
+            $table->decimal('cost', 14, 2);
+            $table->decimal('line_total', 14, 2);
             $table->timestamps();
         });
     }

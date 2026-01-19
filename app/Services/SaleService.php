@@ -19,7 +19,6 @@ class SaleService
                 'currency_id' => $payload['currency_id'],
                 'subtotal' => 0,
                 'discount' => $payload['discount'] ?? 0,
-                'tax' => $payload['tax'] ?? 0,
                 'total' => 0,
                 'paid_amount' => $payload['paid_amount'] ?? 0,
                 'change_amount' => $payload['change_amount'] ?? 0,
@@ -114,7 +113,7 @@ class SaleService
                 }
             }
 
-            $total = $subtotal - (float)($payload['discount'] ?? 0) + (float)($payload['tax'] ?? 0);
+            $total = $subtotal - (float)($payload['discount'] ?? 0);
 
             DB::table('sales')->where('id', $saleId)->update([
                 'subtotal' => $subtotal,

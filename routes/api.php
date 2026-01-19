@@ -87,6 +87,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::middleware('permission:sales.view')->get('/sales', [SaleController::class, 'index']);
     Route::middleware('permission:sales.create')->post('/sales', [SaleController::class, 'store']);
     Route::middleware('permission:sales.view')->get('/sales/{saleId}', [SaleController::class, 'show']);
+    Route::middleware('permission:sales.create')->post('/sales/{sale}/return', [SaleController::class, 'storeReturn']);
 
     /*
     | Payments

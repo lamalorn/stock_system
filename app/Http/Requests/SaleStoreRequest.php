@@ -17,7 +17,6 @@ class SaleStoreRequest extends FormRequest
             'sale_type' => ['nullable','string'], // RETAIL/PACKAGE
             'currency_id' => ['required','integer','exists:currencies,id'],
             'discount' => ['nullable','numeric','min:0'],
-            'tax' => ['nullable','numeric','min:0'],
             'paid_amount' => ['nullable','numeric','min:0'],
             'change_amount' => ['nullable','numeric','min:0'],
 

@@ -27,11 +27,12 @@ Route::middleware('auth:sanctum')->group(function () {
     | Users (ADMIN ONLY)
     */
     Route::middleware('permission:users.view')->get('/users', [UserController::class, 'index']);
+    Route::middleware('permission:users.view')->get('/users/summary', [UserController::class, 'summary']);
     Route::middleware('permission:users.create')->post('/users', [UserController::class, 'store']);
     Route::middleware('permission:users.view')->get('/users/{user}', [UserController::class, 'show']);
     Route::middleware('permission:users.update')->put('/users/{user}', [UserController::class, 'update']);
     Route::middleware('permission:users.delete')->delete('/users/{user}', [UserController::class, 'destroy']);
-
+    
     /*
     | Roles (ADMIN ONLY)
     */
@@ -53,6 +54,8 @@ Route::middleware('auth:sanctum')->group(function () {
     | Categories
     */
     Route::middleware('permission:categories.view')->get('/categories', [CategoryController::class, 'index']);
+    Route::middleware('permission:categories.view')->get('/categories/summary', [CategoryController::class, 'summary']);
+    Route::middleware('permission:categories.view')->get('/categories/summary', [CategoryController::class, 'summary']);
     Route::middleware('permission:categories.create')->post('/categories', [CategoryController::class, 'store']);
     Route::middleware('permission:categories.update')->put('/categories/{category}', [CategoryController::class, 'update']);
     Route::middleware('permission:categories.delete')->delete('/categories/{category}', [CategoryController::class, 'destroy']);
@@ -60,6 +63,15 @@ Route::middleware('auth:sanctum')->group(function () {
     /*
     | Products
     */
+    Route::middleware('permission:products.view')->get('/products/summary', [ProductController::class, 'summary']);
+    // GET /categories/options
+    Route::middleware('permission:categories.view')->get('/categories/options', function () {
+        return \App\Models\Category::query()
+            ->where('is_active', true)
+            ->select('id', 'name')
+            ->orderBy('name')
+            ->get();
+    });
     Route::middleware('permission:products.view')->get('/products', [ProductController::class, 'index']);
     Route::middleware('permission:products.create')->post('/products', [ProductController::class, 'store']);
     Route::middleware('permission:products.view')->get('/products/{product}', [ProductController::class, 'show']);
@@ -84,6 +96,7 @@ Route::middleware('auth:sanctum')->group(function () {
     /*
     | Sales
     */
+    Route::middleware('permission:sales.view')->get('/sales/summary', [SaleController::class, 'summary']);
     Route::middleware('permission:sales.view')->get('/sales', [SaleController::class, 'index']);
     Route::middleware('permission:sales.create')->post('/sales', [SaleController::class, 'store']);
     Route::middleware('permission:sales.view')->get('/sales/{saleId}', [SaleController::class, 'show']);
@@ -104,7 +117,10 @@ Route::middleware('auth:sanctum')->group(function () {
     /*
     | Dashboard
     */
-    Route::middleware('permission:dashboard.income')->get('/dashboard/income', [DashboardController::class, 'income']);
-    Route::middleware('permission:dashboard.products_pie')->get('/dashboard/products-pie', [DashboardController::class, 'productsPie']);
-    Route::middleware('permission:dashboard.view')->get('/dashboard/summary', [DashboardController::class, 'summary']);
+    Route::prefix('dashboard')->group(function () {
+        Route::get('/summary', [DashboardController::class, 'summary']);
+        Route::get('/income', [DashboardController::class, 'income']);
+        Route::get('/products-pie', [DashboardController::class, 'productsPie']);
+        Route::get('/recent-sales', [DashboardController::class, 'recentSales']);
+    });
 });

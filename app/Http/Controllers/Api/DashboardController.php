@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\DB;
 
 class DashboardController extends Controller
 {
-    // /dashboard/income?range=week|month|year
+    // GET /dashboard/income?range=week|month|year
     public function income(Request $request)
     {
         $range = $request->query('range', 'week');
@@ -45,7 +45,7 @@ class DashboardController extends Controller
         return response()->json($rows);
     }
 
-    // /dashboard/products-pie
+    // GET /dashboard/products-pie
     public function productsPie()
     {
         $rows = DB::select("
@@ -64,7 +64,7 @@ class DashboardController extends Controller
         return response()->json($rows);
     }
 
-    // /dashboard/summary
+    // GET /dashboard/summary
     public function summary()
     {
         $today = DB::selectOne("
@@ -73,14 +73,50 @@ class DashboardController extends Controller
             WHERE status='PAID' AND DATE(created_at)=DATE(NOW())
         ");
 
+        $totalOrders = DB::selectOne("
+            SELECT COUNT(*) AS total_orders_24h
+            FROM sales
+            WHERE created_at >= NOW() - INTERVAL '24 hours'
+        ");
+
+        $customersWeek = DB::selectOne("
+            SELECT COUNT(*) AS customers_week
+            FROM customers
+            WHERE created_at >= NOW() - INTERVAL '7 days'
+        ");
+
         $lowStock = DB::table('products')
             ->where('is_active', true)
-            ->whereColumn('stock_qty','<=','min_qty')
+            ->whereColumn('stock_qty', '<=', 'min_qty')
             ->count();
 
         return response()->json([
             'income_today' => (float)$today->income_today,
-            'low_stock_count' => $lowStock,
+            'total_orders_24h' => (int)$totalOrders->total_orders_24h,
+            'customers_week' => (int)$customersWeek->customers_week,
+            'low_stock_count' => (int)$lowStock,
         ]);
+    }
+
+    // GET /dashboard/recent-sales?limit=10
+    public function recentSales(Request $request)
+    {
+        $limit = (int)$request->query('limit', 10);
+
+        $rows = DB::select("
+            SELECT
+              sale_no AS id,
+              CASE
+                WHEN customer_id IS NULL THEN 'Walk-in'
+                ELSE CONCAT('Customer #', customer_id)
+              END AS customer,
+              total AS total,
+              status AS status
+            FROM sales
+            ORDER BY created_at DESC
+            LIMIT ?
+        ", [$limit]);
+
+        return response()->json($rows);
     }
 }

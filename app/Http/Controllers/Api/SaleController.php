@@ -19,9 +19,107 @@ class SaleController extends Controller
 {
     public function __construct(private SaleService $sale, private StockService $stock) {}
 
-    public function index()
+     // GET /sales/summary
+    public function summary()
     {
-        return DB::table('sales')->orderByDesc('id')->paginate(15);
+        $today = DB::selectOne("
+            SELECT COALESCE(SUM(total),0) AS total
+            FROM sales
+            WHERE status='PAID' AND DATE(created_at)=DATE(NOW())
+        ");
+
+        $orders24h = DB::selectOne("
+            SELECT COUNT(*) AS c
+            FROM sales
+            WHERE created_at >= NOW() - INTERVAL '24 hours'
+        ");
+
+        $dueCount = DB::selectOne("
+            SELECT COUNT(*) AS c
+            FROM sales
+            WHERE status='DUE'
+        ");
+
+        $returns = DB::selectOne("
+            SELECT COALESCE(SUM(total_refund),0) AS total
+            FROM sale_returns
+            WHERE DATE(created_at)=DATE(NOW())
+        ");
+
+        return response()->json([
+            'today_sales' => (float)$today->total,
+            'orders_24h' => (int)$orders24h->c,
+            'due_count' => (int)$dueCount->c,
+            'today_refunds' => (float)$returns->total,
+        ]);
+    }
+
+    // GET /sales?search=&status=&type=&date_from=&date_to=&sort=&page=&per_page=
+    public function index(Request $request)
+    {
+        $search = trim((string)$request->query('search', ''));      // sale_no
+        $status = trim((string)$request->query('status', ''));      // PAID|DUE|CANCELLED
+        $type = trim((string)$request->query('type', ''));          // RETAIL|WHOLESALE
+        $dateFrom = trim((string)$request->query('date_from', '')); // YYYY-MM-DD
+        $dateTo = trim((string)$request->query('date_to', ''));     // YYYY-MM-DD
+        $sort = trim((string)$request->query('sort', 'newest'));    // newest|oldest|total-high|total-low
+
+        $perPage = (int)$request->query('per_page', 10);
+        $perPage = max(1, min(100, $perPage));
+
+        $q = DB::table('sales as s')
+            ->leftJoin('users as u', 'u.id', '=', 's.sold_by')
+            ->leftJoin('currencies as cur', 'cur.id', '=', 's.currency_id')
+            ->select([
+                's.id',
+                's.sale_no',
+                's.customer_id',
+                's.status',
+                's.sale_type',
+                's.total',
+                's.paid_amount',
+                's.change_amount',
+                's.created_at',
+                'u.name as sold_by_name',
+                DB::raw("COALESCE(cur.symbol,'') as currency_symbol"),
+            ]);
+
+        if ($search !== '') {
+            $s = mb_strtolower($search);
+            $q->whereRaw('LOWER(s.sale_no) LIKE ?', ["%{$s}%"]);
+        }
+
+        if ($status !== '' && strtolower($status) !== 'all') {
+            $q->where('s.status', strtoupper($status));
+        }
+
+        if ($type !== '' && strtolower($type) !== 'all') {
+            $q->where('s.sale_type', strtoupper($type));
+        }
+
+        if ($dateFrom !== '') {
+            $q->whereDate('s.created_at', '>=', $dateFrom);
+        }
+        if ($dateTo !== '') {
+            $q->whereDate('s.created_at', '<=', $dateTo);
+        }
+
+        $sortKey = strtolower($sort);
+        if ($sortKey === 'oldest') $q->orderBy('s.created_at', 'asc');
+        elseif ($sortKey === 'total-high') $q->orderBy('s.total', 'desc');
+        elseif ($sortKey === 'total-low') $q->orderBy('s.total', 'asc');
+        else $q->orderBy('s.created_at', 'desc'); // newest
+
+        // Add computed customer label
+        // (Laravel query builder can't do CASE alias easily in select list without raw)
+        $paginator = $q->paginate($perPage);
+
+        $paginator->getCollection()->transform(function ($row) {
+            $row->customer = $row->customer_id ? ('Customer #' . $row->customer_id) : 'Walk-in';
+            return $row;
+        });
+
+        return $paginator;
     }
 
     public function store(SaleStoreRequest $request)

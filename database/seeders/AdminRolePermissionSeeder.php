@@ -60,9 +60,9 @@ class AdminRolePermissionSeeder extends Seeder
         |--------------------------------------------------------------------------
         */
         $adminRole   = Role::firstOrCreate(['name' => 'admin',   'guard_name' => 'api']);
-        $managerRole = Role::firstOrCreate(['name' => 'manager', 'guard_name' => 'api']);
+        // $managerRole = Role::firstOrCreate(['name' => 'manager', 'guard_name' => 'api']);
         $cashierRole = Role::firstOrCreate(['name' => 'cashier', 'guard_name' => 'api']);
-        $staffRole   = Role::firstOrCreate(['name' => 'staff',   'guard_name' => 'api']);
+        // $staffRole   = Role::firstOrCreate(['name' => 'staff',   'guard_name' => 'api']);
 
         /*
         |--------------------------------------------------------------------------
@@ -74,12 +74,12 @@ class AdminRolePermissionSeeder extends Seeder
         $adminRole->syncPermissions(Permission::all());
 
         // Manager → reports + view + approve
-        $managerRole->syncPermissions([
-            'dashboard.view','dashboard.income','dashboard.products_pie',
-            'products.view','categories.view',
-            'purchases.view','sales.view','payments.view',
-            'stock.view_alerts',
-        ]);
+        // $managerRole->syncPermissions([
+        //     'dashboard.view','dashboard.income','dashboard.products_pie',
+        //     'products.view','categories.view',
+        //     'purchases.view','sales.view','payments.view',
+        //     'stock.view_alerts',
+        // ]);
 
         // Cashier → sales + payments
         $cashierRole->syncPermissions([
@@ -89,11 +89,11 @@ class AdminRolePermissionSeeder extends Seeder
         ]);
 
         // Staff → inventory only
-        $staffRole->syncPermissions([
-            'products.view',
-            'categories.view',
-            'stock.increase','stock.decrease','stock.view_alerts',
-        ]);
+        // $staffRole->syncPermissions([
+        //     'products.view',
+        //     'categories.view',
+        //     'stock.increase','stock.decrease','stock.view_alerts',
+        // ]);
 
         /*
         |--------------------------------------------------------------------------

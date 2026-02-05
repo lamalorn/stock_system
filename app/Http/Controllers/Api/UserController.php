@@ -12,13 +12,66 @@ use Spatie\Permission\Models\Role;
 
 class UserController extends Controller
 {
-    public function index()
+    // GET /users/summary
+    public function summary()
     {
-        return User::query()
+        $total = User::query()->count();
+        $disabled = User::query()->where('is_active', false)->count();
+
+        $admins = User::query()
+            ->whereHas('roles', fn($q) => $q->where('name', 'Admin'))
+            ->count();
+
+        $staff = User::query()
+            ->whereHas('roles', fn($q) => $q->whereIn('name', ['Staff', 'Cashier']))
+            ->count();
+
+        return response()->json([
+            'total_users' => $total,
+            'admins' => $admins,
+            'staff' => $staff,
+            'disabled' => $disabled,
+        ]);
+    }
+
+    // GET /users?search=&role=&status=&sort=newest|oldest&per_page=10
+    public function index(Request $request)
+    {
+        $search = trim((string)$request->query('search', ''));
+        $role = trim((string)$request->query('role', ''));       // Admin/Staff/Cashier
+        $status = trim((string)$request->query('status', ''));   // active/disabled
+        $sort = trim((string)$request->query('sort', 'newest')); // newest/oldest
+        $perPage = (int) $request->query('per_page', 10);
+        $perPage = max(1, min(100, $perPage));
+
+        $q = User::query()
             ->with('roles:id,name')
-            ->select('id','name','email','phone','is_active','last_login_at','created_at')
-            ->latest()
-            ->paginate(15);
+            ->select('id','name','email','phone','is_active','last_login_at','created_at');
+
+        if ($search !== '') {
+            $s = mb_strtolower($search);
+
+            $q->where(function ($qq) use ($s) {
+                $qq->whereRaw('LOWER(name) LIKE ?', ["%{$s}%"])
+                ->orWhereRaw('LOWER(email) LIKE ?', ["%{$s}%"])
+                ->orWhereRaw("LOWER(COALESCE(phone,'')) LIKE ?", ["%{$s}%"]);
+            });
+        }
+
+
+        if ($status !== '') {
+            if (strtolower($status) === 'active') $q->where('is_active', true);
+            if (strtolower($status) === 'disabled') $q->where('is_active', false);
+        }
+
+        if ($role !== '' && strtolower($role) !== 'all') {
+            $q->whereHas('roles', fn($qr) => $qr->where('name', $role));
+        }
+
+        if (strtolower($sort) === 'oldest') $q->orderBy('created_at', 'asc');
+        else $q->orderBy('created_at', 'desc');
+
+        return $q->paginate($perPage);
     }
 
     public function store(UserStoreRequest $request)

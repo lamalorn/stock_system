@@ -16,13 +16,14 @@ class AdminRolePermissionSeeder extends Seeder
         // Reset cached roles & permissions
         app()[PermissionRegistrar::class]->forgetCachedPermissions();
 
+        $guard = 'api';
+
         /*
         |--------------------------------------------------------------------------
         | 1. Create Permissions
         |--------------------------------------------------------------------------
         */
         $permissions = [
-
             // Users & RBAC
             'users.view','users.create','users.update','users.delete',
             'roles.view','roles.create','roles.update','roles.delete',
@@ -40,7 +41,7 @@ class AdminRolePermissionSeeder extends Seeder
             'purchases.view','purchases.create','purchases.receive',
 
             // Sales & Payments
-            'sales.view','sales.create','sales.refund',
+            'sales.view','sales.create','sales.update','sales.refund',
             'payments.view','payments.create',
 
             // Dashboard
@@ -50,7 +51,7 @@ class AdminRolePermissionSeeder extends Seeder
         foreach ($permissions as $perm) {
             Permission::firstOrCreate([
                 'name' => $perm,
-                'guard_name' => 'api',
+                'guard_name' => $guard,
             ]);
         }
 
@@ -59,10 +60,8 @@ class AdminRolePermissionSeeder extends Seeder
         | 2. Create Roles
         |--------------------------------------------------------------------------
         */
-        $adminRole   = Role::firstOrCreate(['name' => 'admin',   'guard_name' => 'api']);
-        // $managerRole = Role::firstOrCreate(['name' => 'manager', 'guard_name' => 'api']);
-        $cashierRole = Role::firstOrCreate(['name' => 'cashier', 'guard_name' => 'api']);
-        // $staffRole   = Role::firstOrCreate(['name' => 'staff',   'guard_name' => 'api']);
+        $adminRole   = Role::firstOrCreate(['name' => 'admin',   'guard_name' => $guard]);
+        $cashierRole = Role::firstOrCreate(['name' => 'cashier', 'guard_name' => $guard]);
 
         /*
         |--------------------------------------------------------------------------
@@ -70,30 +69,23 @@ class AdminRolePermissionSeeder extends Seeder
         |--------------------------------------------------------------------------
         */
 
-        // Admin → everything
-        $adminRole->syncPermissions(Permission::all());
+        // ✅ Admin → everything BUT only for guard=api (prevents GuardDoesNotMatch)
+        $adminRole->syncPermissions(
+            Permission::where('guard_name', $guard)->get()
+        );
 
-        // Manager → reports + view + approve
-        // $managerRole->syncPermissions([
-        //     'dashboard.view','dashboard.income','dashboard.products_pie',
-        //     'products.view','categories.view',
-        //     'purchases.view','sales.view','payments.view',
-        //     'stock.view_alerts',
-        // ]);
-
-        // Cashier → sales + payments
-        $cashierRole->syncPermissions([
-            'products.view',
-            'sales.view','sales.create',
-            'payments.create',
-        ]);
-
-        // Staff → inventory only
-        // $staffRole->syncPermissions([
-        //     'products.view',
-        //     'categories.view',
-        //     'stock.increase','stock.decrease','stock.view_alerts',
-        // ]);
+        // ✅ Cashier → sales + payments (choose what you want them to do)
+        $cashierRole->syncPermissions(
+            Permission::where('guard_name', $guard)
+                ->whereIn('name', [
+                    'products.view',
+                    'sales.view','sales.create',
+                    // add these if cashier can do them:
+                    // 'sales.update',
+                    // 'sales.refund',
+                    'payments.create',
+                ])->get()
+        );
 
         /*
         |--------------------------------------------------------------------------
@@ -114,8 +106,9 @@ class AdminRolePermissionSeeder extends Seeder
         | 5. Assign Admin Role
         |--------------------------------------------------------------------------
         */
-        if (!$admin->hasRole('admin')) {
-            $admin->assignRole($adminRole);
+        // ✅ Ensure correct guard roles are used
+        if (!$admin->hasRole($adminRole->name, $guard)) {
+            $admin->syncRoles([$adminRole]);
         }
     }
 }

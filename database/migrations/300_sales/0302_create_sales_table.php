@@ -13,10 +13,16 @@ return new class extends Migration
 
             $table->string('sale_no', 40)->unique();
 
-            $table->foreignId('customer_id')->nullable()->constrained('customers')->nullOnDelete();
+            $table->foreignId('customer_id')->nullable()
+                ->constrained('customers')->nullOnDelete();
 
-            $table->string('status', 15)->default('PAID'); // DRAFT, PAID, VOID, REFUNDED
-            $table->string('sale_type', 10)->default('RETAIL'); // RETAIL, PACKAGE
+            // enum: PAID, DRAFT, UNPAID, REFUND
+            $table->enum('status', ['PAID', 'DRAFT', 'UNPAID', 'REFUND'])
+                ->default('PAID');
+
+            // enum: RETAIL, PACKAGE
+            $table->enum('sale_type', ['RETAIL', 'PACKAGE'])
+                ->default('RETAIL');
 
             $table->foreignId('currency_id')->constrained('currencies');
 
@@ -27,7 +33,8 @@ return new class extends Migration
             $table->decimal('paid_amount', 12, 2)->default(0);
             $table->decimal('change_amount', 12, 2)->default(0);
 
-            $table->foreignId('sold_by')->nullable()->constrained('users')->nullOnDelete();
+            $table->foreignId('sold_by')->nullable()
+                ->constrained('users')->nullOnDelete();
 
             $table->timestamps();
 
@@ -35,6 +42,7 @@ return new class extends Migration
             $table->index('status');
             $table->index('sale_type');
         });
+
     }
 
     public function down(): void

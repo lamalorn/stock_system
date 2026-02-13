@@ -121,22 +121,182 @@ class SaleController extends Controller
 
         return $paginator;
     }
-
-    public function store(SaleStoreRequest $request)
+    // POST /sales  (POS create)
+    public function store(Request $request)
     {
-        $data = $request->validated();
+        $data = $request->validate([
+            'sale_type' => 'required|string', // RETAIL
+            'status' => 'required|string',    // PAID or DUE
+            'currency_id' => 'required|integer',
+            'discount' => 'nullable|numeric|min:0',
+            'paid_amount' => 'nullable|numeric|min:0',
+            'customer_id' => 'nullable|integer',
+            'items' => 'required|array|min:1',
+            'items.*.product_id' => 'required|integer',
+            'items.*.qty' => 'required|numeric|min:0.0001',
+            'items.*.price' => 'required|numeric|min:0',
+            'items.*.discount' => 'nullable|numeric|min:0',
+        ]);
 
-        $saleId = $this->sale->createSale($data, $this->stock, $request->user()?->id);
+        return DB::transaction(function () use ($request, $data) {
+            $discount = (float)($data['discount'] ?? 0);
 
-        return response()->json(['message' => 'Created', 'sale_id' => $saleId], 201);
+            $subtotal = 0;
+            foreach ($data['items'] as $it) {
+                $qty = (float)$it['qty'];
+                $price = (float)$it['price'];
+                $lineDisc = (float)($it['discount'] ?? 0);
+                $lineTotal = max(0, ($qty * $price) - $lineDisc);
+                $subtotal += $lineTotal;
+            }
+
+            $total = max(0, $subtotal - $discount);
+
+            $paidAmount = (float)($data['paid_amount'] ?? 0);
+            $changeAmount = max(0, $paidAmount - $total);
+
+            // generate sale_no (simple)
+            $nextId = (int) (DB::table('sales')->max('id') ?? 0) + 1;
+            $saleNo = 'S-' . str_pad((string)$nextId, 5, '0', STR_PAD_LEFT);
+
+            $saleId = DB::table('sales')->insertGetId([
+                'sale_no' => $saleNo,
+                'customer_id' => $data['customer_id'] ?? null,
+                'status' => strtoupper($data['status']),
+                'sale_type' => strtoupper($data['sale_type']),
+                'currency_id' => (int)$data['currency_id'],
+                'subtotal' => $subtotal,
+                'discount' => $discount,
+                'total' => $total,
+                'paid_amount' => $paidAmount,
+                'change_amount' => $changeAmount,
+                'sold_by' => $request->user()?->id,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            foreach ($data['items'] as $it) {
+                $qty = (float)$it['qty'];
+                $price = (float)$it['price'];
+                $lineDisc = (float)($it['discount'] ?? 0);
+                $lineTotal = max(0, ($qty * $price) - $lineDisc);
+
+                DB::table('sale_items')->insert([
+                    'sale_id' => $saleId,
+                    'product_id' => (int)$it['product_id'],
+                    'qty' => $qty,
+                    'price' => $price,
+                    'discount' => $lineDisc,
+                    'line_total' => $lineTotal,
+                    'is_bundle_parent' => false,
+                    'parent_bundle_item_id' => null,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+
+                // stock movement (optional)
+                DB::table('products')->where('id', (int)$it['product_id'])
+                    ->decrement('stock_qty', $qty);
+
+                DB::table('stock_movements')->insert([
+                    'product_id' => (int)$it['product_id'],
+                    'movement_type' => 'SALE',
+                    'qty' => $qty * -1,
+                    'reference_type' => 'SALE',
+                    'reference_id' => $saleId,
+                    'note' => 'POS sale',
+                    'created_by' => $request->user()?->id,
+                    'created_at' => now(),
+                ]);
+            }
+
+            return response()->json([
+                'message' => 'Created',
+                'sale_id' => $saleId,
+                'sale_no' => $saleNo,
+            ], 201);
+        });
     }
 
-    public function show(int $saleId)
+    // PUT Status (Edit Status)
+    public function updateStatus(Request $request, Sale $sale)
     {
-        $sale = DB::table('sales')->where('id', $saleId)->first();
-        $items = DB::table('sale_items')->where('sale_id', $saleId)->get();
+        $data = $request->validate([
+            'status' => 'required|in:PAID,DRAFT,UNPAID,REFUND,CANCELLED',
+        ]);
 
-        return response()->json(['sale' => $sale, 'items' => $items]);
+        $sale->status = $data['status'];
+        $sale->save();
+
+        $sale->refresh(); // reload from DB
+
+        return response()->json([
+            'message' => 'Sale status updated successfully.',
+            'changed' => $sale->wasChanged('status'),
+            'data' => $sale,
+        ]);
+    }
+
+    public function show($saleId)
+    {
+        $sale = DB::table('sales as s')
+            ->leftJoin('users as u', 'u.id', '=', 's.sold_by')
+            ->leftJoin('currencies as cur', 'cur.id', '=', 's.currency_id')
+            ->select([
+                's.id',
+                's.sale_no',
+                's.customer_id',
+                's.status',
+                's.sale_type',
+                's.currency_id',
+                's.subtotal',
+                's.discount',
+                's.total',
+                's.paid_amount',
+                's.change_amount',
+                's.created_at',
+                'u.name as sold_by_name',
+                DB::raw("COALESCE(cur.symbol,'') as currency_symbol"),
+                DB::raw("COALESCE(cur.code,'') as currency_code"),
+            ])
+            ->where('s.id', (int)$saleId)
+            ->first();
+
+        if (!$sale) {
+            return response()->json(['message' => 'Sale not found'], 404);
+        }
+
+        $items = DB::table('sale_items as si')
+            ->join('products as p', 'p.id', '=', 'si.product_id')
+            ->select([
+                'si.id',
+                'si.product_id',
+                'p.name as product_name',
+                'p.sku as sku',
+                'si.qty',
+                'si.price',
+                'si.discount',
+                'si.line_total',
+                'si.is_bundle_parent',
+                'si.parent_bundle_item_id',
+            ])
+            ->where('si.sale_id', (int)$saleId)
+            ->orderBy('si.id')
+            ->get();
+
+        $customerLabel = $sale->customer_id ? ('Customer #' . $sale->customer_id) : 'Walk-in';
+
+        return response()->json([
+            'sale' => $sale,
+            'customer' => $customerLabel,
+            'items' => $items,
+        ]);
+    }
+
+    // GET /sales/{sale}/print  (same data as show)
+    public function print($saleId)
+    {
+        return $this->show($saleId);
     }
 
      /**

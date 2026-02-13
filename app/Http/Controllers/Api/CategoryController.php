@@ -62,10 +62,11 @@ class CategoryController extends Controller
         return $q->paginate($perPage);
     }
 
-    public function store(Request $request)
+   public function store(Request $request)
     {
-        $data = $request->validated([
+        $data = $request->validate([
             'name' => ['required','string','max:120'],
+            'description' => ['nullable','string'],
             'parent_id' => ['nullable','integer','exists:categories,id'],
             'is_active' => ['nullable','boolean'],
         ]);
@@ -81,8 +82,9 @@ class CategoryController extends Controller
 
     public function update(Request $request, Category $category)
     {
-        $data = $request->validated([
+        $data = $request->validate([
             'name' => ['sometimes','string','max:120'],
+            'description' => ['sometimes','nullable','string'],
             'parent_id' => ['nullable','integer','exists:categories,id'],
             'is_active' => ['nullable','boolean'],
         ]);

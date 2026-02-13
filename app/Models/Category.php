@@ -3,10 +3,11 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use App\Models\Product;
 
 class Category extends Model
 {
-    protected $fillable = ['name','parent_id','is_active'];
+    protected $fillable = ['name','description','parent_id','is_active'];
 
     protected $casts = ['is_active' => 'boolean'];
 
@@ -22,6 +23,6 @@ class Category extends Model
 
     public function products()
     {
-        return $this->hasMany(Product::class);
+        return $this->hasMany(Product::class, 'category_id');
     }
 }

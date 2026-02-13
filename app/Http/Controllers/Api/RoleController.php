@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\RoleStoreRequest;
+use App\Http\Requests\RoleUpdateRequest;
 use App\Http\Requests\SyncRolePermissionsRequest;
 use Illuminate\Http\Request;
 use Spatie\Permission\Models\Role;
@@ -12,7 +13,7 @@ class RoleController extends Controller
 {
     public function index()
     {
-        return Role::query()->with('permissions')->orderBy('name')->get();
+        return Role::query()->where('guard_name', 'api')->with('permissions')->orderBy('name')->get();
     }
 
     public function store(RoleStoreRequest $request)
@@ -23,7 +24,7 @@ class RoleController extends Controller
         return response()->json($role, 201);
     }
 
-    public function update(RoleStoreRequest $request, Role $role)
+    public function update(RoleUpdateRequest $request, Role $role)
     {
         $data = $request->validated();
 
